@@ -23,7 +23,7 @@ from sklearn.neighbors import NearestNeighbors
 import tangram as tg
 from SpaceFlow import SpaceFlow
 import seaborn as sns
-from cellrefiner.util import 
+from cellrefiner.util import cal_glvs,glvs,pre_cal1,sparsify,F_gc,V_xy,F_spot
 
 class cellrefiner(object):
     
@@ -151,7 +151,7 @@ class cellrefiner(object):
                         dv=V_xy(pos[i,k,:],pos[i,j,:],V0,U0,xi1,xi2)
                         p[j,:]+=-dt*dv
                         p[j,:]+=4*F_gc_const[i]*F_gc(pos[i,k,:],pos[i,j,:],X_sc2m2[k,:],X_sc2m2[j,:])# gene force
-                        p[j,:]+=4*F_gc_const[i]*a1[k,j]
+                        p[j,:]+=4*F_gc_const[i]*H[k,j]
             pos[i+1,:,:]=p
         
             z2=np.empty(pos[i+1,:,0].shape) # enforce tissue boundary
