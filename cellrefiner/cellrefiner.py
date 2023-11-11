@@ -15,7 +15,7 @@ from scipy.spatial.distance import cdist
 from scipy.special import kl_div
 from sklearn.neighbors import NearestNeighbors
 import tangram as tg
-import scipy
+from scipy.sparse import csr_matrix
 import seaborn as sns
 from cellrefiner.util import cal_glvs,glvs,pre_cal1,sparsify,F_gc,V_xy,F_spot
 
@@ -41,7 +41,7 @@ class CellRefiner(object):
         Generate affinity matrix
         """
 
-        if isinstance(self.adata_sc.X, scipy.sparse.csr_matrix):
+        if isinstance(self.adata_sc.X, csr_matrix):
             a = self.adata_sc.X.toarray()
         else:
             a = self.adata_sc.X
