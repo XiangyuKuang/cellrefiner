@@ -39,11 +39,12 @@ class CellRefiner(object):
         """
         Generate affinity matrix
         """
-
-        if isinstance(self.adata_sc.X, csr_matrix):
-            a = self.adata_sc.X.toarray()
+        adata_sc = self.adata_sc
+        
+        if isinstance(adata_sc.X, csr_matrix):
+            a = adata_sc.X.toarray()
         else:
-            a = self.adata_sc.X
+            a = adata_sc.X
 
         db = self.db
         tl = np.zeros((a.shape[0], len(db['interaction_name'])))  # ligand expression matrix
