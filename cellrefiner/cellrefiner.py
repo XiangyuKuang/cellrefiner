@@ -132,7 +132,7 @@ class CellRefiner(object):
         self.cell_codes = cell_codes  # cell type numbers
         self.cell5m = cell5m
 
-    def sim_cr(self, iterations=30, W=None, tissue_bound=0, dt=20, m_val=125, rS=150):
+    def sim_cr(self, iterations=30, W=None, tissue_bound=0, dt=0.0028, m_val=125, rS=150):
         xc = self.xc
         xs = self.xs
         x_id1 = self.x_id1
@@ -175,7 +175,7 @@ class CellRefiner(object):
                 for k in np.arange(0, xc.shape[0])[x_id1[j]]:
                     if j != k:
                         dv = V_xy(pos[i, k, :], pos[i, j, :], V0, U0, xi1, xi2)
-                        p[j, :] += -dt * dv
+                        p[j, :] += -dt * 7100 * dv
                         p[j, :] += 4 * F_gc_const[i] * F_gc(pos[i, k, :], pos[i, j, :], X_sc2m2[k, :],
                                                             X_sc2m2[j, :])  # gene force
                         p[j, :] += 4 * F_gc_const[i] * H[k, j]
