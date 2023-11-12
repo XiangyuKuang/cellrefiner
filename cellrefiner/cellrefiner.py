@@ -132,7 +132,7 @@ class CellRefiner(object):
         self.cell_codes = cell_codes  # cell type numbers
         self.cell5m = cell5m
 
-    def sim_cr(self, iterations=30, W=None, tissue_bound=0, dt=0.0028, m_val=125, rS=150):
+    def sim_cr(self, iterations=30, W=None, tissue_bound=0, dt=0.0028, m_val=125, rS=100):
         xc = self.xc
         xs = self.xs
         x_id1 = self.x_id1
@@ -170,7 +170,7 @@ class CellRefiner(object):
         z_val = z_cutoff * np.amax(cal_glvs(pos[0, :, :]))  # tissue boundary constraint
         for i in range(iterations):
             p = pos[i, :, :].copy()
-            p += F_spot(pos[i, :, :], pos_s[i, :, :], rS)  # add spot force to every cell
+            p += F_spot(pos[i, :, :], pos_s[i, :, :], rS*.7)  # add spot force to every cell
             for j in range(pos.shape[1]):
                 for k in np.arange(0, xc.shape[0])[x_id1[j]]:
                     if j != k:
