@@ -15,7 +15,6 @@ from scipy.spatial.distance import cdist
 from scipy.special import kl_div
 from sklearn.neighbors import NearestNeighbors
 import tangram as tg
-from scipy.sparse import csr_matrix
 import seaborn as sns
 from cellrefiner.util import cal_glvs,glvs,pre_cal1,sparsify,F_gc,V_xy,F_spot
 
