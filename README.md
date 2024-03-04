@@ -13,7 +13,7 @@ After creating the environment, activate it:
 
 Now install the CellRefiner package from github via the command line:
 
-```pip install github+https://github.com/echang992000/cellrefiner.git```
+```pip install git+https://github.com/echang992000/cellrefiner.git```
 
 If the installation is not successful, try installing the required packages in requirements.txt:
 
