@@ -22,3 +22,11 @@ If the installation is not successful, try installing the required packages in r
 # Useage
 
 For a quick tutorial, please see the jupyter notebook and associated data in the tutorial folder.
+
+# Hardware Requirements
+
+This requires only a standard computer with enough RAM to support the in-memory operations. Having a GPU is preferable but not necessary. Installation should take <10 minutes.
+
+# Software Dependencies
+
+Please see the requirements.txt for package versions. This package is supported for Windows and has been tested on Windows 10 and 11. Running the tutorial should take <2 min if using a GPU and affinity matrix provided.
