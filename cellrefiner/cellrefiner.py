@@ -74,32 +74,54 @@ class CellRefiner(object):
 
         self.W = W
 
-    def pp_cr(self, device="cuda:0", group="cell_class"):
+    def pp_cr(self, device="cuda:0",spatial_key = 'spatial', group="cell_class", Lx=5000, map=None, k = 5):
         adata_sc = self.adata_sc
         adata_st = self.adata_st
+        self.Lx = Lx
         sc.tl.rank_genes_groups(adata_sc, groupby=group, use_raw=False)
         markers_df = pd.DataFrame(adata_sc.uns["rank_genes_groups"]["names"]).iloc[0:100, :]
         markers = list(np.unique(markers_df.melt().value.values))
-        tg.pp_adatas(adata_sc, adata_st, genes=markers)
-        if device == "cpu":
-            ad_map = tg.map_cells_to_space(adata_sc, adata_st,
-                                           mode="cells",
-                                           density_prior='rna_count_based',
-                                           num_epochs=600,
-                                           device="cpu",
-                                           )
+        tg.pp_adatas(adata_sc, adata_st, genes=markers) # produce adata.uns['overlap_genes'], required in belowing
+        if map is None: # using tangram
+            if device == "cpu":
+                ad_map = tg.map_cells_to_space(adata_sc, adata_st,
+                                            mode="cells",
+                                            density_prior='rna_count_based',
+                                            num_epochs=600,
+                                            device="cpu",
+                                            )
+            else:
+                ad_map = tg.map_cells_to_space(adata_sc, adata_st,
+                                            mode="cells",
+                                            density_prior='rna_count_based',
+                                            num_epochs=600,
+                                            device="cuda:0",
+                                            # lambda_r=1
+                                            )
+            gmap = ad_map.X
         else:
-            ad_map = tg.map_cells_to_space(adata_sc, adata_st,
-                                           mode="cells",
-                                           density_prior='rna_count_based',
-                                           num_epochs=600,
-                                           device="cuda:0",
-                                           )
-        x_coord = adata_st.obsm['spatial']
-        scale = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
-        x_coord = x_coord / scale * 5000
-        a = np.tile(x_coord[:, 0], (5, 1)).T.flatten()
-        b = np.tile(x_coord[:, 1], (5, 1)).T.flatten()
+            gmap = map # using input mapping
+        
+        x_coord = adata_st.obsm[spatial_key]
+        #  estimate spot distance
+        if Lx is None:
+            nc = adata_st.shape[0]
+            sq.gr.spatial_neighbors(adata_st,delaunay=True,spatial_key=spatial_key,coord_type='generic')
+            distance_matrix = adata_st.obsp['spatial_distances']
+            ds = np.zeros(nc)
+            indices = distance_matrix.indices
+            indptr = distance_matrix.indptr
+            for cid in range(nc):
+                j = indices[indptr[cid]:indptr[cid+1]]
+                ds[cid] = np.mean(distance_matrix[cid,j])
+            self.scale = 200/np.median(ds)*np.sqrt(k/5)
+            x_coord = x_coord*self.scale
+        else:
+            self.scale = None
+            scale = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
+            x_coord = x_coord / scale * self.Lx
+        a = np.tile(x_coord[:, 0], (k, 1)).T.flatten()
+        b = np.tile(x_coord[:, 1], (k, 1)).T.flatten()
         xs = np.concatenate(([a], [b]), axis=0).T
         xc = xs + np.random.normal(0, 20, size=xs.shape)
         neigh = NearestNeighbors(n_neighbors=5)
@@ -109,20 +131,21 @@ class CellRefiner(object):
         for i in range(xs.shape[0]):
             x_id1.append(np.linalg.norm(xs - xs[i, :], axis=1) < 150)
 
-        gmap = ad_map.X
-
-        # create spot by cell index matrix for the top 5 cells
-        cell5 = np.zeros((gmap.shape[1], 5))
-        gmap1 = gmap
+        gmap1 = gmap.copy()
+        mean_map = np.zeros(gmap1.shape[1])
+        # create spot by cell index matrix for the top k cells
+        cell5 = np.zeros((gmap.shape[1], k))
         for i in range(gmap1.shape[1]):
-            cell5[i, :] = np.argpartition(gmap1[:, i], -5)[-5:]
+            cell5[i, :] = np.argpartition(gmap1[:, i], -k)[-k:]
+            mean_map[i] = gmap1[cell5[i, :].astype(int), i].mean()
             gmap1[cell5[i, :].astype(int), :] = 0
 
         cell5m = cell5.flatten().astype(int)
         cell_codes = pd.Categorical(adata_sc.obs[group]).codes[cell5m]
 
         adata_sc1 = adata_sc[cell5m, adata_sc.uns['overlap_genes']]
-        adata_sc1 = adata_sc1[:, adata_sc1.var.highly_variable]  # should also check if highly variable genes exist
+        if 'highly_variable' in adata_sc1.var.columns: #check if highly variable genes exist
+            adata_sc1 = adata_sc1[:, adata_sc1.var.highly_variable] 
         X_sc2m2 = adata_sc1.obsm['X_pca'].toarray()
 
         self.xc = xc  # cell coordinates
@@ -131,6 +154,9 @@ class CellRefiner(object):
         self.X_sc2m2 = X_sc2m2  # PCA matrix
         self.cell_codes = cell_codes  # cell type numbers
         self.cell5m = cell5m
+        self.spots = cell5
+        self.mean_map = mean_map#
+        self.map = gmap
 
     def sim_cr(self, iterations=30, W=None, tissue_bound=0, dt=0.0028, m_val=125, rS=100):
         xc = self.xc
@@ -191,4 +217,7 @@ class CellRefiner(object):
 
         x_coord = self.adata_st.obsm['spatial']
         scale = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
-        self.pos = pos * scale / 5000
+        if self.scale is None:
+            self.pos = pos * scale / self.Lx
+        else:
+            self.pos = pos / self.scale
