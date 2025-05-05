@@ -16,10 +16,13 @@ def contact_signal(df_ligrec: pd.DataFrame,
 
     signal matrix is stored as .obsp['ligand-receptor']
 
-    signal names are stored as .uns['contact_signal']
+    signal names are stored as .uns['contact_signal_info']
 
     rows are sender cells, columns are receiver cells
     '''
+
+    if df_ligrec.shape[0] == 0:
+        raise ValueError("empty ligand-receptor DB")
     if sem is None: # sem is not provided, using adata contact matrix
         contact_matrix = adata.obsp[contact_key]
     else: # sem is provided
@@ -64,14 +67,11 @@ def contact_signal(df_ligrec: pd.DataFrame,
             adata.obsp[key] = sig_mat
             lr_keys.append(key)
     df_ligrec = df_ligrec[I]
+
     # pathway and total
     pth_keys = df_ligrec.iloc[:,2].unique().tolist()
     for n,pth in enumerate(pth_keys):
         lr_idx = np.where(df_ligrec.iloc[:,2]==pth)[0]
-        # lr_idx = df_ligrec[df_ligrec.iloc[:,2]==pth].index.to_numpy()
-        # l = df_ligrec.iloc[lr_idx[0],0]
-        # r = df_ligrec.iloc[lr_idx[0],1]
-        # data = adata.obsp[f'{l}{lr_delimiter}{r}'].copy()
         data = csr_matrix((nc,nc))
         for i in lr_idx:
             l = df_ligrec.iloc[i,0]
@@ -83,13 +83,19 @@ def contact_signal(df_ligrec: pd.DataFrame,
         else:
             total += data.copy()
     adata.obsp['total'] = total
-    adata.uns['contact_signal'] = {'lr_pair': lr_keys, 'pathway': pth_keys, 'total': ['total'], 'db': df_ligrec}
+    adata.uns['contact_signal_info'] = {'lr_pair': lr_keys, 'pathway': pth_keys, 'total': ['total'], 'db': df_ligrec}
 
 def cluster_communication(adata: AnnData,
                           cluster_key: str,
                           signal: str = 'total',
                           n_permutations: int = 100,
                           seed: int = 0):
+    """
+    Cluster-cluster communication
+
+    add cluster communication to .uns
+    """
+
     cluster_list = list(adata.obs[cluster_key].cat.categories)
     cluster_cell = adata.obs[cluster_key].to_numpy()
     sig_mat = adata.obsp[signal]
@@ -100,6 +106,12 @@ def cluster_communication(adata: AnnData,
 def signal_vector(adata: AnnData,
                   signal_type: Optional[Union[List,str]] = ['lr_pair','pathway','total'],
                   return_output=False):
+    """
+    Compute the sender signals and receiver signals for each cells
+
+    add 'sender_signal' 'receiver_signal' to .obsm
+    """
+
     signal_type = [signal_type] if type(signal_type) is str else signal_type
     signal_list = []
     for key in signal_type:
@@ -114,6 +126,7 @@ def signal_vector(adata: AnnData,
     df_r = pd.DataFrame(index = adata.obs.index, columns=signal_list,data=signal_vec_r)
     adata.obsm['sender_signal'] = df_s
     adata.obsm['receiver_signal'] = df_r
+    print("add 'sender_signal' 'receiver_signal' to .obsm")
     if return_output:
         return df_s, df_r
 
@@ -132,7 +145,6 @@ def summarize_signal(adata: AnnData, cluster_key: str):
     
 
 def summarize_cluster(X, clusterid, clusternames, rng, n_permutations):
-    # commot
     # Input a sparse matrix of cell signaling and output a pandas dataframe
     # for cluster-cluster signaling
     n = len(clusternames)

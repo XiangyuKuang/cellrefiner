@@ -75,6 +75,7 @@ class CellRefiner(object):
         self.W = W
 
     def pp_cr(self, device="cuda:0",spatial_key = 'spatial', group="cell_class", Lx=5000, map=None, k = 5):
+        self.k = k
         adata_sc = self.adata_sc
         adata_st = self.adata_st
         self.Lx = Lx

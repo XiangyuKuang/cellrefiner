@@ -1,11 +1,10 @@
 from typing import Optional, Union, List, Dict
 from math import pi, sqrt
-from scipy.spatial import Delaunay, distance, KDTree
+from scipy.spatial import Delaunay, distance
 from scipy.sparse import lil_matrix, coo_matrix, csr_matrix
 from matplotlib import colormaps
 from matplotlib.colors import to_rgb
 import numpy as np
-import cupy
 from numba import cuda
 import pickle
 import os
@@ -365,7 +364,7 @@ class SEM(CellBase):
     def __init__(self, 
                  ne_per_cell: int,
                  re: float,
-                 rd_ratio: float = 2,
+                 rd_ratio: float = 2.5,
                  adata: Optional[AnnData] = None,
                  cluster_key: str = 'leiden',
                  spatial_key: str = 'spatial',
@@ -512,9 +511,8 @@ class SEM(CellBase):
         sigmadt = sqrt(dt) * sigma
 
         # transfer array to gpu
-        d_rm_intra = cupy.asanyarray(rm_intra)
-        d_xe = cupy.asanyarray(self.xe)
-        d_xe_F = cupy.asanyarray(self.xe)
+        d_xe = cuda.to_device(self.xe)
+        d_xe_F = cuda.to_device(self.xe)
         d_ecid = cuda.to_device(self.ecid)
         d_alpha = cuda.to_device(alpha)
 
@@ -525,7 +523,7 @@ class SEM(CellBase):
         cuda.synchronize()
         for t in range(T):
             x_randt = cuda.to_device((sigmadt*np.sqrt((T-t)/T) * self.rng.normal(0, 1, size=self.xe.shape)).astype(np.float32))#*self.cell_size[self.ecid,np.newaxis]
-            dynamics2d_gpu2[bpg, tpb](d_xe, d_xe_F, d_ecid, d_alpha, gamma, x_randt, d_rm_intra, rm_inter, dt)
+            dynamics2d_gpu2[bpg, tpb](d_xe, d_xe_F, d_ecid, d_alpha, gamma, x_randt, rm_intra, rm_inter, dt)
             cuda.synchronize()
             # var:t-1, var_F:t
             d_xe[:, :] = d_xe_F # update xe to t
@@ -535,7 +533,7 @@ class SEM(CellBase):
             self.t += 1
         # close
         cuda.synchronize()
-        self.xe = d_xe.get()
+        self.xe = d_xe.copy_to_host()
         self.update_xc()
         self.alphashape_info['computed'] = False # marks alpha shapes need to be updated
 
@@ -617,7 +615,7 @@ def dynamics2d_gpu2(xe, xe_F, ecid, alpha, gamma, x_randt, rm_intra, rm_inter, d
             if abs(deltax) < 30 and abs(deltay) < 30:
                 r = sqrt(deltax**2 + deltay**2)
                 if ecid[j] == cid:
-                    dV = max(2*d_potential_LJ_gpu(r, rm_intra[cid], 1.5)+ gamma*r, -10.0 )#
+                    dV = max(2*d_potential_LJ_gpu(r, rm_intra, 1.5)+ gamma*r, -10.0 )
                 else:
                     dV = max(alpha[cid,ecid[j]]*d_potential_LJ_gpu(r, rm_inter, 1.5), -10.0)
                 xe_F[i, 0] += -dt * dV * deltax
@@ -627,10 +625,6 @@ def dynamics2d_gpu2(xe, xe_F, ecid, alpha, gamma, x_randt, rm_intra, rm_inter, d
 
 @cuda.jit(device=True)
 def d_potential_LJ_gpu(r, rm, epsilon):
-    rs6 = (rm/r)**6
-    return epsilon*r**-2*(rs6-rs6*rs6)
-
-def d_potential_LJ_cpu(r, rm, epsilon):
     rs6 = (rm/r)**6
     return epsilon*r**-2*(rs6-rs6*rs6)
 
